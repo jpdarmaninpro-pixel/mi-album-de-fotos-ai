@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Album } from '../types';
 
 // Use environment variables for API keys and Client ID
@@ -32,6 +32,7 @@ export const useGoogleDrive = () => {
   const [initError, setInitError] = useState<string | null>(null);
   const [rootFolderId, setRootFolderId] = useState<string | null>(null);
   const [manifestFileId, setManifestFileId] = useState<string | null>(null);
+  const timeoutRef = useRef<number | null>(null);
 
   const findOrCreateRootFolder = useCallback(async (gapiClient: any): Promise<string> => {
     // Search for the folder first
@@ -56,64 +57,102 @@ export const useGoogleDrive = () => {
   }, []);
 
   useEffect(() => {
+    if (document.getElementById('gsi-script')) {
+        return; // Scripts already loaded or loading
+    }
+    
     if (!CLIENT_ID || !API_KEY) {
         setInitError("Configuration Incomplete: VITE_GOOGLE_CLIENT_ID and VITE_GOOGLE_API_KEY must be set in your .env file.");
         return;
     }
-    const initializeGapiClient = async () => {
-        await window.gapi.client.init({
-            apiKey: API_KEY,
-            discoveryDocs: DISCOVERY_DOCS,
-        });
-        setGapi(window.gapi);
-        setGoogle(window.google);
-        
-        const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: async (tokenResponse: any) => {
-                if (tokenResponse.error) {
-                  console.error('OAuth Error:', tokenResponse.error, tokenResponse.error_description);
-                  return;
-                }
-                if (tokenResponse.access_token) {
-                  window.gapi.client.setToken(tokenResponse);
-                  try {
-                    const response = await window.gapi.client.request({ path: 'https://www.googleapis.com/oauth2/v3/userinfo' });
-                    const profileData = response.result;
-                    const userProfile: GDriveUser = {
-                      getName: () => profileData.name,
-                      getEmail: () => profileData.email,
-                      getImageUrl: () => profileData.picture,
-                    };
-                    setUser(userProfile);
-                    const folderId = await findOrCreateRootFolder(window.gapi);
-                    setRootFolderId(folderId);
+    
+    // Set a timeout to prevent infinite loading state
+    timeoutRef.current = window.setTimeout(() => {
+        setInitError(
+          `Connection to Google is taking too long. This is the most common issue and is almost always caused by one of these problems:\n\n` +
+          `1. **Google Cloud Configuration:** The 'Authorized JavaScript origins' in your OAuth credentials do not exactly match your app's URL (${window.location.origin}). Please double-check this setting.\n\n` +
+          `2. **Browser Issues:** Your browser might be blocking third-party cookies, or a browser extension (like an ad-blocker) is interfering with the Google sign-in scripts.\n\n` +
+          `Please verify your Google Cloud setup and try refreshing the page or using a different browser profile.`
+        );
+    }, 15000); // 15-second timeout
 
-                  } catch (error) {
-                    console.error('Error fetching user profile:', error);
-                  }
-                }
-            },
-        });
-        setTokenClient(client);
+    const initializeGapiClient = async () => {
+        try {
+            await window.gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: DISCOVERY_DOCS,
+            });
+
+            // If initialization is successful, clear the timeout
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+
+            setGapi(window.gapi);
+            setGoogle(window.google);
+            
+            const client = window.google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: async (tokenResponse: any) => {
+                    if (tokenResponse.error) {
+                      console.error('OAuth Error:', tokenResponse.error, tokenResponse.error_description);
+                      setInitError(`Google Sign-In Error: ${tokenResponse.error_description || tokenResponse.error}. This may be due to a popup blocker or disabled third-party cookies.`);
+                      return;
+                    }
+                    if (tokenResponse.access_token) {
+                      window.gapi.client.setToken(tokenResponse);
+                      try {
+                        const response = await window.gapi.client.request({ path: 'https://www.googleapis.com/oauth2/v3/userinfo' });
+                        const profileData = response.result;
+                        const userProfile: GDriveUser = {
+                          getName: () => profileData.name,
+                          getEmail: () => profileData.email,
+                          getImageUrl: () => profileData.picture,
+                        };
+                        setUser(userProfile);
+                        const folderId = await findOrCreateRootFolder(window.gapi);
+                        setRootFolderId(folderId);
+                      } catch (error) {
+                        console.error('Error fetching user profile:', error);
+                        setInitError(`Failed to fetch user profile after sign-in. ${error instanceof Error ? error.message : ''}`);
+                      }
+                    }
+                },
+            });
+            setTokenClient(client);
+            setIsGapiLoaded(true);
+        } catch (error) {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            console.error("Failed to initialize GAPI client:", error);
+            const errorMessage = error instanceof Error ? error.message : (error as any).details || JSON.stringify(error);
+            setInitError(`Failed to initialize Google API client. This can be caused by an incorrect API Key, network issues, or third-party cookie restrictions in your browser. Details: ${errorMessage}`);
+        }
     };
 
     const gapiScript = document.createElement('script');
     gapiScript.src = 'https://apis.google.com/js/api.js';
+    gapiScript.id = 'gapi-script';
     gapiScript.async = true;
     gapiScript.defer = true;
     gapiScript.onload = () => window.gapi.load('client', initializeGapiClient);
     
     const gsiScript = document.createElement('script');
     gsiScript.src = 'https://accounts.google.com/gsi/client';
+    gsiScript.id = 'gsi-script';
     gsiScript.async = true;
     gsiScript.defer = true;
     gsiScript.onload = () => document.body.appendChild(gapiScript);
     
     document.body.appendChild(gsiScript);
-    setIsGapiLoaded(true);
 
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      const gapiElem = document.getElementById('gapi-script');
+      const gsiElem = document.getElementById('gsi-script');
+      if (gapiElem?.parentNode) gapiElem.parentNode.removeChild(gapiElem);
+      if (gsiElem?.parentNode) gsiElem.parentNode.removeChild(gsiElem);
+    }
   }, [findOrCreateRootFolder]);
 
   const signIn = useCallback(() => {

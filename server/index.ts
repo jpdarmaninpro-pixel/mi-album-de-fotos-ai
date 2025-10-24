@@ -1,6 +1,5 @@
-// Fix: Aliased express Request and Response types to avoid potential name collisions
-// that were causing type resolution errors.
-import express, { Request as ExpressRequest, Response as ExpressResponse } from 'express';
+// Fix: Import Request and Response types directly from express to resolve type conflicts and property access errors.
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -24,10 +23,11 @@ const port = process.env.PORT || 3001;
 
 // Middlewares
 app.use(cors());
+// Fix: By explicitly importing Request and Response types, this middleware is now correctly typed and recognized by app.use().
 app.use(express.json({ limit: '10mb' }));
 
 // API routes
-app.post('/api/edit-image', async (req: ExpressRequest, res: ExpressResponse) => {
+app.post('/api/edit-image', async (req: Request, res: Response) => {
     const { base64Image, prompt } = req.body;
     if (!base64Image || !prompt) {
         return res.status(400).json({ error: 'Missing base64Image or prompt' });
@@ -45,7 +45,7 @@ app.post('/api/edit-image', async (req: ExpressRequest, res: ExpressResponse) =>
     }
 });
 
-app.post('/api/generate-description', async (req: ExpressRequest, res: ExpressResponse) => {
+app.post('/api/generate-description', async (req: Request, res: Response) => {
     const { base64Images } = req.body;
     if (!base64Images || !Array.isArray(base64Images)) {
         return res.status(400).json({ error: 'Missing base64Images array' });
@@ -59,7 +59,7 @@ app.post('/api/generate-description', async (req: ExpressRequest, res: ExpressRe
     }
 });
 
-app.post('/api/generate-qr-card', async (req: ExpressRequest, res: ExpressResponse) => {
+app.post('/api/generate-qr-card', async (req: Request, res: Response) => {
     const { photographerName, profilePicBase64, qrCodeBase64, customPrompt } = req.body;
     if (!photographerName || !profilePicBase64 || !qrCodeBase64) {
         return res.status(400).json({ error: 'Missing required parameters for QR card generation' });
@@ -83,7 +83,7 @@ const clientBuildPath = path.join(__dirname, 'public');
 app.use(express.static(clientBuildPath));
 
 // Catch-all route to serve index.html for client-side routing
-app.get('*', (req: ExpressRequest, res: ExpressResponse) => {
+app.get('*', (req: Request, res: Response) => {
   res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 
