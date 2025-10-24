@@ -28,6 +28,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/gapi": "^0.0.47",
+    "@types/gapi.client.docs": "^1.0.0",
     "@types/gapi.client.drive": "^3.0.0",
     "@types/node": "^20.12.12",
     "@types/qrcode": "^1.5.5",
