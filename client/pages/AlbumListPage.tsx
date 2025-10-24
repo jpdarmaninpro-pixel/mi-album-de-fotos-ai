@@ -1,14 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGoogleDrive } from '../hooks/useGoogleDrive';
-import { Album } from '../types';
+import { Album, Photo } from '../types';
 import Spinner from '../components/Spinner';
 import { PlusIcon, PhotoIcon, TrashIcon, PencilIcon, OpenIcon, ClipboardIcon, QRIcon } from '../components/icons';
 import EditAlbumModal from '../components/EditAlbumModal';
 import QRCodeCardGeneratorModal from '../components/QRCodeCardGeneratorModal';
+import { urlToFile, blobToBase64, slugify } from '../lib/helpers';
+import { generateAlbumDescriptionWithGemini } from '../lib/gemini';
 
 const AlbumListPage: React.FC = () => {
-  const { getAlbumManifest, saveAlbumManifest, renameAlbumFolder, deleteAlbumFolder, isReady } = useGoogleDrive();
+  const { 
+    getAlbumManifest, 
+    saveAlbumManifest, 
+    renameAlbumFolder, 
+    deleteAlbumFolder, 
+    isReady,
+    user,
+    createAlbumFolder,
+    uploadAlbumAssets,
+    uploadPublicJsonData
+  } = useGoogleDrive();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,24 +31,124 @@ const AlbumListPage: React.FC = () => {
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // State for sample album creation
+  const [isCreatingSample, setIsCreatingSample] = useState(false);
+  const [sampleCreationStatus, setSampleCreationStatus] = useState('');
+  const [hasCheckedForSample, setHasCheckedForSample] = useState(false);
+
+  const createSampleAlbum = useCallback(async () => {
+    if (!user || !isReady) return;
+
+    setIsCreatingSample(true);
+    setSampleCreationStatus('Warming up the AI...');
+
+    try {
+        const albumName = "My First AI Album (Sample)";
+        const sampleImageInfos = [
+            { url: 'https://images.pexels.com/photos/3777943/pexels-photo-3777943.jpeg?auto=compress&cs=tinysrgb&w=600', filename: 'sample-portrait.jpg' },
+            { url: 'https://images.pexels.com/photos/3225517/pexels-photo-3225517.jpeg?auto=compress&cs=tinysrgb&w=600', filename: 'sample-landscape.jpg' },
+            { url: 'https://images.pexels.com/photos/2253275/pexels-photo-2253275.jpeg?auto=compress&cs=tinysrgb&w=600', filename: 'sample-animal.jpg' },
+            { url: 'https://images.pexels.com/photos/1090638/pexels-photo-1090638.jpeg?auto=compress&cs=tinysrgb&w=600', filename: 'sample-object.jpg' },
+        ];
+        
+        setSampleCreationStatus('Downloading sample images...');
+        const samplePhotoFiles = await Promise.all(
+            sampleImageInfos.map(info => urlToFile(info.url, info.filename, 'image/jpeg'))
+        );
+
+        const profilePicFile = await urlToFile(user.getImageUrl(), 'profile.jpg', 'image/jpeg');
+
+        setSampleCreationStatus('Asking AI to write a description...');
+        const photoBase64sForDesc = await Promise.all(samplePhotoFiles.map(f => blobToBase64(f)));
+        const { description } = await generateAlbumDescriptionWithGemini(photoBase64sForDesc);
+        
+        setSampleCreationStatus('Creating album in Google Drive...');
+        const folderId = await createAlbumFolder(albumName);
+
+        const { profilePictureUrl, photoUrls } = await uploadAlbumAssets(
+            folderId,
+            profilePicFile,
+            samplePhotoFiles,
+            (progress) => setSampleCreationStatus(progress.message)
+        );
+      
+        const finalPhotos: Photo[] = samplePhotoFiles.map((p, i) => ({ 
+            id: `${slugify(p.name)}-${i}`, 
+            url: photoUrls[i] 
+        }));
+
+        const albumId = slugify(albumName);
+        const newAlbumData: Omit<Album, 'publicDataFileId'> = {
+            id: albumId,
+            name: albumName,
+            description: description,
+            photos: finalPhotos,
+            photographer: { 
+                name: user.getName(), 
+                profilePictureUrl,
+                contactLink: `mailto:${user.getEmail()}`,
+                donationLink: '',
+                zellePhoneNumber: '',
+            },
+            folderId: folderId,
+        };
+      
+        setSampleCreationStatus('Publishing album...');
+        const publicDataFileId = await uploadPublicJsonData(
+            folderId,
+            newAlbumData, 
+            `${albumId}-public.json`
+        );
+
+        const finalAlbum: Album = { ...newAlbumData, publicDataFileId };
+
+        setSampleCreationStatus('Saving everything...');
+        await saveAlbumManifest([finalAlbum]);
+        
+        setAlbums([finalAlbum]);
+        
+    } catch (err) {
+        setError(`Failed to create sample album: ${err instanceof Error ? err.message : String(err)}. Please try refreshing the page or create an album manually.`);
+    } finally {
+        setIsCreatingSample(false);
+        setSampleCreationStatus('');
+    }
+}, [user, isReady, createAlbumFolder, uploadAlbumAssets, uploadPublicJsonData, saveAlbumManifest]);
+
   const fetchAlbums = useCallback(async () => {
-    if (!isReady) return;
+    if (!isReady || hasCheckedForSample) return;
+
     setPageLoading(true);
     setError(null);
+    const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Loading albums timed out. The request to Google Drive is taking too long. Please check your network connection and refresh the page.")), 15000)
+    );
+
     try {
-      const manifestAlbums = await getAlbumManifest();
-      setAlbums(manifestAlbums);
+      const manifestAlbums = await Promise.race([ getAlbumManifest(), timeoutPromise ]) as Album[];
+      setHasCheckedForSample(true);
+
+      if (manifestAlbums.length > 0) {
+        setAlbums(manifestAlbums);
+        setPageLoading(false);
+      } else {
+        await createSampleAlbum();
+        setPageLoading(false);
+      }
     } catch (err) {
-      setError('Failed to load albums from Google Drive.');
+      setError(err instanceof Error ? err.message : 'Failed to load albums from Google Drive.');
       console.error(err);
-    } finally {
       setPageLoading(false);
     }
-  }, [getAlbumManifest, isReady]);
+  }, [getAlbumManifest, isReady, hasCheckedForSample, createSampleAlbum]);
 
   useEffect(() => {
-    fetchAlbums();
-  }, [fetchAlbums]);
+    if (isReady && !hasCheckedForSample) {
+        fetchAlbums();
+    } else if (!isReady) {
+        setPageLoading(true); // Ensure loading is true until ready
+    }
+  }, [isReady, hasCheckedForSample, fetchAlbums]);
 
   const handleCreateNew = () => {
     navigate('/admin/album/new');
@@ -88,10 +200,12 @@ const AlbumListPage: React.FC = () => {
 
   return (
     <>
-      {pageLoading && (
+      {(pageLoading || isCreatingSample) && (
         <div className="fixed inset-0 bg-white bg-opacity-75 flex flex-col items-center justify-center z-50">
           <Spinner size="lg" />
-          <p className="text-gray-700 text-xl mt-4 font-medium">Loading Albums...</p>
+          <p className="text-gray-700 text-xl mt-4 font-medium">
+            {isCreatingSample ? (sampleCreationStatus || 'Creating sample album...') : 'Loading Albums...'}
+          </p>
         </div>
       )}
       
@@ -111,11 +225,11 @@ const AlbumListPage: React.FC = () => {
             </div>
         )}
 
-        {!pageLoading && albums.length === 0 && !error && (
+        {!pageLoading && !isCreatingSample && albums.length === 0 && !error && (
             <div className="text-center py-16 px-6 border-2 border-dashed border-gray-300 rounded-lg">
                 <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-xl font-medium text-gray-900">No albums yet</h3>
-                <p className="mt-1 text-gray-500">Get started by creating your first album.</p>
+                <h3 className="mt-2 text-xl font-medium text-gray-900">Welcome to your AI Photo Album!</h3>
+                <p className="mt-1 text-gray-500">Your space is ready. Get started by creating your first album.</p>
             </div>
         )}
         

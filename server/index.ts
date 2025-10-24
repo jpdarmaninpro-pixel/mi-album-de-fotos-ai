@@ -1,4 +1,4 @@
-// Fix: Use the default express import to avoid conflicts with global Request/Response types.
+// Fix: Use fully qualified express Request and Response types to resolve conflicts with global types.
 import express from 'express';
 import cors from 'cors';
 import path from 'path';

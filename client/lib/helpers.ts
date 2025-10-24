@@ -31,3 +31,13 @@ export const urlToBase64 = async (url: string): Promise<string> => {
     const blob = await response.blob();
     return blobToBase64(blob);
 };
+
+export const urlToFile = async (url: string, filename: string, mimeType?: string): Promise<File> => {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch file from url: ${url}. Status: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    const resolvedMimeType = mimeType || blob.type;
+    return new File([blob], filename, { type: resolvedMimeType });
+};
