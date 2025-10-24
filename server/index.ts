@@ -1,7 +1,6 @@
-// Fix: Changed express import and type references to use the `express.` prefix
-// (e.g., `express.Request`, `express.Response`). This resolves TypeScript errors
-// caused by type conflicts or incorrect type resolution for Express objects.
-import express from 'express';
+// Fix: Aliased express Request and Response types to avoid potential name collisions
+// that were causing type resolution errors.
+import express, { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -20,7 +19,7 @@ const __dirname = path.dirname(__filename);
 // Fix: Use __dirname to resolve path to .env file, avoiding process.cwd() type error.
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
-const app: express.Express = express();
+const app = express();
 const port = process.env.PORT || 3001;
 
 // Middlewares
@@ -28,7 +27,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // API routes
-app.post('/api/edit-image', async (req: express.Request, res: express.Response) => {
+app.post('/api/edit-image', async (req: ExpressRequest, res: ExpressResponse) => {
     const { base64Image, prompt } = req.body;
     if (!base64Image || !prompt) {
         return res.status(400).json({ error: 'Missing base64Image or prompt' });
@@ -46,7 +45,7 @@ app.post('/api/edit-image', async (req: express.Request, res: express.Response) 
     }
 });
 
-app.post('/api/generate-description', async (req: express.Request, res: express.Response) => {
+app.post('/api/generate-description', async (req: ExpressRequest, res: ExpressResponse) => {
     const { base64Images } = req.body;
     if (!base64Images || !Array.isArray(base64Images)) {
         return res.status(400).json({ error: 'Missing base64Images array' });
@@ -60,7 +59,7 @@ app.post('/api/generate-description', async (req: express.Request, res: express.
     }
 });
 
-app.post('/api/generate-qr-card', async (req: express.Request, res: express.Response) => {
+app.post('/api/generate-qr-card', async (req: ExpressRequest, res: ExpressResponse) => {
     const { photographerName, profilePicBase64, qrCodeBase64, customPrompt } = req.body;
     if (!photographerName || !profilePicBase64 || !qrCodeBase64) {
         return res.status(400).json({ error: 'Missing required parameters for QR card generation' });
@@ -79,12 +78,12 @@ app.post('/api/generate-qr-card', async (req: express.Request, res: express.Resp
 });
 
 // Serve frontend static files
-const clientBuildPath = path.join(__dirname, '..', '..', 'client/dist');
+const clientBuildPath = path.join(__dirname, 'public');
 
 app.use(express.static(clientBuildPath));
 
 // Catch-all route to serve index.html for client-side routing
-app.get('*', (req: express.Request, res: express.Response) => {
+app.get('*', (req: ExpressRequest, res: ExpressResponse) => {
   res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 

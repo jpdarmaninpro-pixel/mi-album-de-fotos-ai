@@ -7,7 +7,7 @@
     "dev": "npm-run-all --parallel dev:server dev:client",
     "dev:client": "vite",
     "dev:server": "tsc-watch -p server/tsconfig.server.json --onSuccess \"node ./server/dist/index.js\"",
-    "build": "npm-run-all build:client build:server",
+    "build": "npm-run-all --serial build:client build:server",
     "build:client": "vite build",
     "build:server": "tsc -p server/tsconfig.server.json",
     "start": "node server/dist/index.js",
