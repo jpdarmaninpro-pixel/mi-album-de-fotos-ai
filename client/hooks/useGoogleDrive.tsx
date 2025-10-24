@@ -122,10 +122,35 @@ export const useGoogleDrive = () => {
             });
             setTokenClient(client);
             setIsGapiLoaded(true);
-        } catch (error) {
+        } catch (error: any) {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             console.error("Failed to initialize GAPI client:", error);
-            const errorMessage = error instanceof Error ? error.message : (error as any).details || JSON.stringify(error);
+
+            // Check for specific "Google Docs API not enabled" error
+            const details = error?.result?.error?.details;
+            if (Array.isArray(details)) {
+                const serviceDisabledError = details.find(
+                    (d: any) => d.reason === 'SERVICE_DISABLED' && d.metadata?.service === 'docs.googleapis.com'
+                );
+                if (serviceDisabledError) {
+                    const activationUrl = serviceDisabledError.metadata?.activationUrl;
+                    let userMessage = `**Action Required: Enable Google Docs API**\n\n` +
+                                      `The app needs permission to create printable QR card sheets, but the Google Docs API isn't enabled in your Google Cloud project.\n\n` +
+                                      `**Please enable it to continue.**`;
+                    if (activationUrl) {
+                        userMessage += `\n\n1. **Go to the following page in a new tab:**\n${activationUrl}\n\n` +
+                                       `2. **Click the 'Enable' button.**\n\n` +
+                                       `3. **Wait a minute, then refresh this page.**`;
+                    } else {
+                        userMessage += `\n\nPlease visit your Google Cloud Console, find the "Google Docs API", and enable it for your project. Then, refresh this page.`;
+                    }
+                    setInitError(userMessage);
+                    return; // Exit after setting the specific error
+                }
+            }
+
+            // Fallback to generic error message
+            const errorMessage = error instanceof Error ? error.message : error?.result?.error?.message || JSON.stringify(error);
             setInitError(`Failed to initialize Google API client. This can be caused by an incorrect API Key, network issues, or third-party cookie restrictions in your browser. Details: ${errorMessage}`);
         }
     };
