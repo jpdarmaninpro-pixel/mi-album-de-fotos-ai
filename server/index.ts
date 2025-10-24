@@ -1,4 +1,4 @@
-// Fix: Use fully qualified types from express to resolve type conflicts with global types.
+// Fix: Use the default express import to avoid conflicts with global Request/Response types.
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -13,18 +13,26 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+// Load environment variables from .env file only in development
+if (process.env.NODE_ENV !== 'production') {
+  // Correctly locate the .env file at the project root from the compiled /dist folder
+  const envPath = path.resolve(__dirname, '..', '..', '.env');
+  dotenv.config({ path: envPath });
+}
+
 
 const app = express();
+// Render provides the PORT environment variable for deployment
 const port = process.env.PORT || 3001;
+// Bind to 0.0.0.0 to accept connections from outside the container, which is required by Render
+const host = '0.0.0.0';
 
 // Middlewares
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // API routes
-// Fix: Use express.Request and express.Response to ensure correct types.
+// Fix: Use fully qualified express.Request and express.Response types to resolve type errors.
 app.post('/api/edit-image', async (req: express.Request, res: express.Response) => {
     const { base64Image, prompt } = req.body;
     if (!base64Image || !prompt) {
@@ -43,7 +51,7 @@ app.post('/api/edit-image', async (req: express.Request, res: express.Response) 
     }
 });
 
-// Fix: Use express.Request and express.Response to ensure correct types.
+// Fix: Use fully qualified express.Request and express.Response types to resolve type errors.
 app.post('/api/generate-description', async (req: express.Request, res: express.Response) => {
     const { base64Images } = req.body;
     if (!base64Images || !Array.isArray(base64Images)) {
@@ -58,7 +66,7 @@ app.post('/api/generate-description', async (req: express.Request, res: express.
     }
 });
 
-// Fix: Use express.Request and express.Response to ensure correct types.
+// Fix: Use fully qualified express.Request and express.Response types to resolve type errors.
 app.post('/api/generate-qr-card', async (req: express.Request, res: express.Response) => {
     const { photographerName, profilePicBase64, qrCodeBase64, customPrompt } = req.body;
     if (!photographerName || !profilePicBase64 || !qrCodeBase64) {
@@ -83,12 +91,14 @@ const clientBuildPath = path.join(__dirname, 'public');
 app.use(express.static(clientBuildPath));
 
 // Catch-all route to serve index.html for client-side routing
-// Fix: Use express.Request and express.Response to ensure correct types.
+// Fix: Use fully qualified express.Request and express.Response types to resolve type errors.
 app.get('*', (req: express.Request, res: express.Response) => {
   res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 
 
-app.listen(port, () => {
-    console.log(`[server]: Server is running at http://localhost:${port}`);
+// Start the server, listening on the correct host and port
+app.listen(Number(port), host, () => {
+    // A more production-friendly log message
+    console.log(`[server]: Server listening on port ${port}`);
 });

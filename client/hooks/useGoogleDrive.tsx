@@ -11,7 +11,8 @@ const DISCOVERY_DOCS = [
   'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
   'https://docs.googleapis.com/$discovery/rest?version=v1'
 ];
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents';
+// Fix: Added userinfo scopes to allow fetching the user's profile after sign-in.
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
 
 
 const ROOT_FOLDER_NAME = 'AI Photo Albums Root';
