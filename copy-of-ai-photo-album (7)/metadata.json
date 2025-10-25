@@ -1,7 +1,0 @@
-{
-  "name": "Copy of AI Photo Album",
-  "description": "A professional photo album web app with AI-powered image editing and album creation features, designed for easy no-code deployment.",
-  "requestFramePermissions": [
-    "camera"
-  ]
-}
