@@ -1,6 +1,4 @@
-
-
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -46,7 +44,7 @@ app.post('/api/auth/login', (req: express.Request, res: express.Response) => {
 
 // Middleware to protect routes
 // Fix: Use express.Request, express.Response, and express.NextFunction to fix typing errors.
-const authenticateJWT = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const authenticateJWT = (req: express.Request, res: express.Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
     if (authHeader) {
         const token = authHeader.split(' ')[1];
