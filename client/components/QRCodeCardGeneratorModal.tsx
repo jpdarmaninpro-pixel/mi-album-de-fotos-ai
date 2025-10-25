@@ -5,8 +5,7 @@ import Spinner from './Spinner';
 import { generateQRCodeCard } from '../lib/gemini';
 import { urlToBase64, slugify } from '../lib/helpers';
 import QRCode from 'qrcode';
-import { AIBrainIcon, DownloadIcon, GoogleDocsIcon, PhotoIcon } from './icons';
-import { useGoogleDrive } from '../hooks/useGoogleDrive';
+import { AIBrainIcon, DownloadIcon, PhotoIcon } from './icons';
 
 interface QRCodeCardGeneratorModalProps {
   album: Album;
@@ -14,28 +13,22 @@ interface QRCodeCardGeneratorModalProps {
 }
 
 const QRCodeCardGeneratorModal: React.FC<QRCodeCardGeneratorModalProps> = ({ album, onClose }) => {
-    const { createQrCardSheetInDocs } = useGoogleDrive();
     const [designs, setDesigns] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [status, setStatus] = useState('Generating initial designs...');
     const [error, setError] = useState<string | null>(null);
     const [customPrompt, setCustomPrompt] = useState('');
     const [selectedDesign, setSelectedDesign] = useState<string | null>(null);
-    const [pageSize, setPageSize] = useState<'LETTER' | 'A4'>('LETTER');
-    const [isGeneratingSheet, setIsGeneratingSheet] = useState(false);
-    const [sheetUrl, setSheetUrl] = useState<string | null>(null);
-    const [sheetError, setSheetError] = useState<string | null>(null);
 
     const generateDesigns = useCallback(async (prompt?: string) => {
         setIsLoading(true);
         setError(null);
         setDesigns([]);
         setSelectedDesign(null);
-        setSheetUrl(null);
 
         try {
             setStatus('Preparing assets...');
-            const publicUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}#/album/${album.publicDataFileId}`;
+            const publicUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}#/album/${album.s3Key}`;
             const qrCodeDataUrl = await QRCode.toDataURL(publicUrl, { width: 256, margin: 1 });
             const qrCodeBase64 = qrCodeDataUrl.split(',')[1];
             const profilePicBase64 = await urlToBase64(album.photographer.profilePictureUrl);
@@ -55,6 +48,9 @@ const QRCodeCardGeneratorModal: React.FC<QRCodeCardGeneratorModalProps> = ({ alb
             }
             
             setDesigns(successfulDesigns.map(d => `data:image/jpeg;base64,${d}`));
+            if (successfulDesigns.length > 0) {
+                setSelectedDesign(`data:image/jpeg;base64,${successfulDesigns[0]}`);
+            }
 
         } catch (err) {
             console.error(err);
@@ -82,23 +78,6 @@ const QRCodeCardGeneratorModal: React.FC<QRCodeCardGeneratorModalProps> = ({ alb
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    };
-
-    const handleGenerateSheet = async () => {
-        if (!selectedDesign) return;
-        setIsGeneratingSheet(true);
-        setSheetUrl(null);
-        setSheetError(null);
-        try {
-            const documentId = await createQrCardSheetInDocs(album.name, album.folderId, selectedDesign, pageSize);
-            setSheetUrl(`https://docs.google.com/document/d/${documentId}/edit`);
-        } catch (err) {
-            console.error(err);
-            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred while creating the document.";
-            setSheetError(`Failed to generate sheet. ${errorMessage}. You may need to sign out and sign in again to accept the new Google Docs permission.`);
-        } finally {
-            setIsGeneratingSheet(false);
-        }
     };
 
     return (
@@ -165,55 +144,14 @@ const QRCodeCardGeneratorModal: React.FC<QRCodeCardGeneratorModalProps> = ({ alb
                         </div>
 
                         {selectedDesign && (
-                            <div className="mt-8 pt-6 border-t border-gray-200">
-                                <p className="text-gray-600 mb-2">2. Download a single card or generate a full printable sheet.</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="bg-gray-50 p-4 rounded-lg text-center">
-                                        <h3 className="font-semibold text-brand-primary">Single Card</h3>
-                                        <p className="text-sm text-gray-500 mb-3">Download the selected card as a single image file.</p>
-                                        <button
-                                            onClick={handleDownload}
-                                            className="w-full inline-flex items-center justify-center px-6 py-3 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700"
-                                        >
-                                            <DownloadIcon className="w-5 h-5 mr-2" />
-                                            Download Selected Card
-                                        </button>
-                                    </div>
-
-                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                        <h3 className="font-semibold text-brand-primary text-center">Printable Sheet</h3>
-                                        <p className="text-sm text-gray-500 mb-3 text-center">Generate a Google Doc with cutting lines for easy home printing.</p>
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <select 
-                                                value={pageSize} 
-                                                onChange={(e) => setPageSize(e.target.value as 'LETTER' | 'A4')}
-                                                className="w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none text-gray-900"
-                                            >
-                                                <option value="LETTER">Letter (8.5x11")</option>
-                                                <option value="A4">A4</option>
-                                            </select>
-                                            <button
-                                                onClick={handleGenerateSheet}
-                                                disabled={isGeneratingSheet}
-                                                className="w-1/2 inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 disabled:bg-gray-400"
-                                            >
-                                                <GoogleDocsIcon className="w-5 h-5 mr-2"/>
-                                                {isGeneratingSheet ? <Spinner size="sm" /> : 'Generate'}
-                                            </button>
-                                        </div>
-                                        {sheetUrl && (
-                                            <div className="mt-2 text-center p-2 bg-green-100 border border-green-300 rounded-md">
-                                                <a href={sheetUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-green-800 hover:underline">
-                                                    Sheet created! Click here to open.
-                                                </a>
-                                                <p className="text-xs text-green-700 mt-1">From the doc, go to File &gt; Download to get a PDF.</p>
-                                            </div>
-                                        )}
-                                        {sheetError && (
-                                            <p className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded-md">{sheetError}</p>
-                                        )}
-                                    </div>
-                                </div>
+                            <div className="mt-8 pt-6 border-t border-gray-200 flex justify-center">
+                                <button
+                                    onClick={handleDownload}
+                                    className="w-full max-w-sm inline-flex items-center justify-center px-6 py-3 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700"
+                                >
+                                    <DownloadIcon className="w-5 h-5 mr-2" />
+                                    Download Selected Card
+                                </button>
                             </div>
                         )}
                     </>

@@ -1,48 +1,66 @@
-import React, { useEffect } from 'react';
-import { useGoogleDrive } from '../hooks/useGoogleDrive';
-import Spinner from './Spinner';
-import { Outlet } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 import AdminLayout from './AdminLayout';
+import Spinner from './Spinner';
+import { useApi } from '../hooks/useApi';
 
 const ProtectedRoute: React.FC = () => {
-  const { isGapiLoaded, isSignedIn, signIn, initError } = useGoogleDrive();
+  const { isAuthenticated, isLoading } = useAuth();
+  const { getProfile } = useApi();
+  const [isProfileSetup, setIsProfileSetup] = useState(false);
+  const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Automatically trigger sign-in when ready and not already signed in.
-    if (isGapiLoaded && !isSignedIn && !initError) {
-      signIn();
-    }
-  }, [isGapiLoaded, isSignedIn, signIn, initError]);
+    if (!isAuthenticated || isLoading) return;
 
+    const checkProfile = async () => {
+      setIsCheckingProfile(true);
+      try {
+        await getProfile();
+        setIsProfileSetup(true);
+        // If they are authenticated and have a profile but land on the profile page, send them to the dashboard.
+        if (location.pathname === '/admin/profile') {
+            // This can be the default behavior, or we can allow them to stay.
+            // For now, let's let them view/edit their profile.
+        }
+      } catch (error: any) {
+        if (error.message.includes('404')) { // Profile not found
+          setIsProfileSetup(false);
+          // If profile is not set up, force redirect to profile setup page
+          if (location.pathname !== '/admin/profile') {
+            navigate('/admin/profile', { replace: true });
+          }
+        } else {
+            // Handle other errors, maybe show an error page or log out
+            console.error("Error checking profile:", error);
+        }
+      } finally {
+        setIsCheckingProfile(false);
+      }
+    };
+    checkProfile();
+  }, [isAuthenticated, isLoading, getProfile, location.pathname, navigate]);
 
-  if (initError) {
+  if (isLoading || (isAuthenticated && isCheckingProfile)) {
     return (
-      <div className="bg-gray-50 min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl bg-white p-6 rounded-lg shadow">
-          <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg" role="alert">
-            <p className="font-bold">Initialization Error</p>
-            <p className="text-sm" style={{ whiteSpace: 'pre-wrap' }}>{initError}</p>
-          </div>
-        </div>
+      <div className="flex h-screen items-center justify-center">
+        <Spinner size="lg" />
       </div>
     );
   }
 
-  // Show a loading screen while initializing or signing in.
-  if (!isGapiLoaded || !isSignedIn) {
-    return (
-      <div className="bg-gray-50 min-h-screen flex items-center justify-center p-4">
-        <main className="container mx-auto flex items-center justify-center">
-            <div className="text-center bg-white p-12 rounded-lg shadow-xl max-w-lg">
-                <Spinner size="lg" />
-                <p className="mt-4 text-gray-600">Connecting to Google Drive...</p>
-            </div>
-        </main>
-      </div>
-    );
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  // If profile is not set up, only allow access to the profile page
+  if (!isProfileSetup && location.pathname !== '/admin/profile') {
+    return <Navigate to="/admin/profile" replace />;
   }
 
-  // Once signed in, render the protected content.
   return (
     <AdminLayout>
       <Outlet />

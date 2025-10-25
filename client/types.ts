@@ -1,7 +1,7 @@
 export interface Photo {
   id: string;
-  url: string; // This will be a Base64 Data URL in the generated file
-  file?: File; // This is used in the admin panel before processing
+  s3Key: string; // The key for the object in the S3 bucket
+  url: string; // The public URL for the image
 }
 
 export interface Album {
@@ -10,13 +10,13 @@ export interface Album {
   description: string;
   photos: Photo[];
   photographer: PhotographerProfile;
-  folderId: string; // The Google Drive folder ID for this album
-  publicDataFileId: string; // The ID of the public JSON file with album data
+  s3Key: string; // The key for the public album data JSON file in S3
 }
 
 export interface PhotographerProfile {
   name: string;
-  profilePictureUrl: string; // This will be a Base64 Data URL
+  profilePictureUrl: string; // Public URL to the S3 object
+  profilePictureS3Key: string; // S3 key for the profile picture
   donationLink: string;
   contactLink: string;
   zellePhoneNumber?: string;
@@ -27,8 +27,6 @@ export interface PhotographerProfile {
 declare global {
   interface Window {
     faceapi: any;
-    gapi: any;
-    google: any;
   }
 }
 
@@ -37,3 +35,9 @@ export type FaceDetection = {
     box: { x: number; y: number; width: number; height: number };
     descriptor: Float32Array;
 };
+
+// API types
+export interface PresignedUrlResponse {
+  url: string;
+  key: string;
+}

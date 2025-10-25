@@ -4,25 +4,33 @@ import AlbumListPage from './pages/AlbumListPage';
 import AlbumEditorPage from './pages/AlbumEditorPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicAlbumPage from './pages/PublicAlbumPage';
+import LoginPage from './pages/LoginPage';
+import ProfilePage from './pages/ProfilePage';
+import { AuthProvider } from './hooks/useAuth';
 
 const App: React.FC = () => {
   return (
-    <div className="min-h-screen font-sans">
-       <Routes>
-        <Route path="/" element={<Navigate to="/admin" />} />
-        
-        {/* Protected Admin Routes */}
-        <Route path="/admin" element={<ProtectedRoute />}>
-          <Route index element={<AlbumListPage />} />
-          <Route path="album/:albumId" element={<AlbumEditorPage />} />
-        </Route>
+    <AuthProvider>
+      <div className="min-h-screen font-sans">
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/album/:albumKey" element={<PublicAlbumPage />} />
+          
+          {/* Redirect root to login or admin dashboard */}
+          <Route path="/" element={<Navigate to="/admin" />} />
 
-        {/* Public Album Viewing Route */}
-        <Route path="/album/:publicDataFileId" element={<PublicAlbumPage />} />
-
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </div>
+          {/* Protected Admin Routes */}
+          <Route path="/admin" element={<ProtectedRoute />}>
+            <Route index element={<AlbumListPage />} />
+            <Route path="album/:albumId" element={<AlbumEditorPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+          </Route>
+          
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </div>
+    </AuthProvider>
   );
 };
 

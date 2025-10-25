@@ -7,7 +7,7 @@ import GeminiImageEditor from '../components/GeminiImageEditor';
 import { ContactIcon, HeartIcon, PhoneIcon } from '../components/icons';
 
 const PublicAlbumPage: React.FC = () => {
-    const { publicDataFileId } = useParams<{ publicDataFileId: string }>();
+    const { albumKey } = useParams<{ albumKey: string }>();
     const [album, setAlbum] = useState<Album | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -15,26 +15,18 @@ const PublicAlbumPage: React.FC = () => {
 
     useEffect(() => {
         const fetchAlbumData = async () => {
-            if (!publicDataFileId) {
-                setError("Album ID is missing.");
+            if (!albumKey) {
+                setError("Album key is missing.");
                 setLoading(false);
                 return;
             }
             setLoading(true);
             setError(null);
             try {
-                // Fix: Cast import.meta to any to resolve TypeScript error for 'env' property
-                const apiKey = (import.meta as any).env.VITE_GOOGLE_API_KEY;
-                if (!apiKey) {
-                    throw new Error("Configuration Error: The Google API Key is missing. Please check the application's environment variables.");
-                }
-                
-                const response = await fetch(`https://www.googleapis.com/drive/v3/files/${publicDataFileId}?alt=media&key=${apiKey}`);
+                const response = await fetch(`/api/public/album/${encodeURIComponent(albumKey)}`);
                 
                 if (!response.ok) {
-                    const errorBody = await response.json();
-                    console.error("API Error:", errorBody);
-                    throw new Error(`Failed to fetch album data. Status: ${response.status}. Is the link correct and public?`);
+                    throw new Error(`Failed to fetch album data. Status: ${response.status}. Is the link correct?`);
                 }
                 const data: Album = await response.json();
                 setAlbum(data);
@@ -47,7 +39,7 @@ const PublicAlbumPage: React.FC = () => {
         };
 
         fetchAlbumData();
-    }, [publicDataFileId]);
+    }, [albumKey]);
     
     if (loading) {
         return (
