@@ -66,7 +66,7 @@ const ProfilePage: React.FC = () => {
             if (profilePictureFile) {
                 const uniqueFileName = `${slugify(profile.name || 'profile')}-${Date.now()}.${profilePictureFile.name.split('.').pop()}`;
                 const { key } = await uploadFile(profilePictureFile, uniqueFileName);
-                const s3Url = `https://${process.env.VITE_AWS_S3_BUCKET}.s3.${process.env.VITE_AWS_REGION}.amazonaws.com/${key}`;
+                const s3Url = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
                 profileToSave.profilePictureS3Key = key;
                 profileToSave.profilePictureUrl = s3Url;
             }

@@ -23,9 +23,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      // Expose certain env variables to the client
-      'process.env.VITE_AWS_S3_BUCKET': JSON.stringify(env.AWS_S3_BUCKET),
-      'process.env.VITE_AWS_REGION': JSON.stringify(env.AWS_REGION),
+      // Expose certain env variables to the client with consistent naming
+      'process.env.AWS_S3_BUCKET': JSON.stringify(env.AWS_S3_BUCKET),
+      'process.env.AWS_REGION': JSON.stringify(env.AWS_REGION),
     },
     build: {
       outDir: '../server/dist/public'

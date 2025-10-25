@@ -142,7 +142,7 @@ const AlbumEditorPage: React.FC = () => {
         setStatus(`Uploading photo ${i + 1} of ${photos.length}...`);
         const uniqueFileName = `${slugify(albumName)}/${photo.id}.${photo.file.name.split('.').pop()}`;
         const { key } = await uploadFile(photo.file, uniqueFileName);
-        const s3Url = `https://${process.env.VITE_AWS_S3_BUCKET}.s3.${process.env.VITE_AWS_REGION}.amazonaws.com/${key}`;
+        const s3Url = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
         finalPhotos.push({ id: photo.id, s3Key: key, url: s3Url });
       }
       
@@ -163,8 +163,6 @@ const AlbumEditorPage: React.FC = () => {
       }
 
       setStatus('Publishing album data...');
-      // This is a bit of a workaround. The public data should be saved by the backend.
-      // For now, let's create a temporary object on the client to send to a generic 'save' endpoint.
       await fetch('/api/albums/public', {
           method: 'POST',
           headers: {
